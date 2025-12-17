@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="windows-1251">
+    <meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- COOP policy for Google OAuth popup compatibility -->
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
+    <title>Password Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+<body>
+    <!-- Login modal window (full login: login + password + Google) -->
+    <div id="masterPasswordModal" class="master-password-modal">
+        <div class="master-password-content">
+            <h2>Login</h2>
+            <p class="master-password-hint">Enter your login and master key to access your data</p>
+            <input type="text" id="userLoginInput" class="master-password-input" placeholder="Login" autocomplete="username">
+            <input type="password" id="masterPasswordInput" class="master-password-input" placeholder="Master key (for encryption)" autocomplete="current-password">
+            <div id="createUserMessage" class="create-user-message" style="display: none;">
+                <p>User with this login not found. Do you want to create a new user?</p>
+            </div>
+            <input type="password" id="confirmPasswordInput" class="master-password-input" placeholder="Confirm master key" autocomplete="new-password" style="display: none;">
+            <div id="masterPasswordError" class="master-password-error" style="display: none;"></div>
+            <div class="master-password-buttons">
+                <button id="masterPasswordSubmit" class="master-password-submit">Login</button>
+                <button id="masterPasswordCreate" class="master-password-create" style="display: none;">Create</button>
+                <button id="masterPasswordCancel" class="master-password-cancel" style="display: none;">Cancel</button>
+                <button id="masterPasswordReset" class="master-password-reset" style="display: none;">Reset data</button>
+            </div>
+            <div class="google-signin-divider">
+                <span>or</span>
+            </div>
+            <button id="googleSignInBtn" class="google-signin-btn">
+                <svg width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.348 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.158 6.656 3.58 9 3.58z"/>
+                </svg>
+                Sign in with Google
+            </button>
+            <div id="googleDriveStatus" class="google-drive-status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Master key only modal (for page refresh) -->
+    <div id="masterKeyOnlyModal" class="master-password-modal" style="display: none;">
+        <div class="master-password-content">
+            <h2>Enter Master Key</h2>
+            <p class="master-password-hint">Enter your master key to decrypt your data</p>
+            <input type="password" id="masterKeyOnlyInput" class="master-password-input" placeholder="Master key" autocomplete="current-password">
+            <div id="masterKeyOnlyError" class="master-password-error" style="display: none;"></div>
+            <div class="master-password-buttons">
+                <button id="masterKeyOnlyOk" class="master-password-submit">OK</button>
+                <button id="masterKeyOnlyCancel" class="master-password-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync conflict resolution modal window -->
+    <div id="syncConflictModal" class="master-password-modal" style="display: none;">
+        <div class="master-password-content">
+            <h2>Sync Conflict</h2>
+            <p class="master-password-hint">Different versions of data found in local storage and Google Drive.</p>
+            <div class="conflict-info">
+                <div class="conflict-option">
+                    <strong>Local data:</strong>
+                    <div id="localConflictInfo" class="conflict-details"></div>
+                </div>
+                <div class="conflict-option">
+                    <strong>Google Drive data:</strong>
+                    <div id="cloudConflictInfo" class="conflict-details"></div>
+                </div>
+            </div>
+            <div id="syncConflictError" class="master-password-error" style="display: none;"></div>
+            <div class="master-password-buttons">
+                <button id="useLocalBtn" class="master-password-submit">Use local</button>
+                <button id="useCloudBtn" class="master-password-create">Use from cloud</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
+        <header>
+            <div class="header-left">
+                <h1>Password Manager</h1>
+                <div class="user-info">
+                    <span class="user-label">User:</span>
+                    <span id="currentUserLogin" class="user-login"></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="syncStatus" class="sync-status">
+                    <span id="syncStatusText" class="sync-status-text">local</span>
+                    <span id="syncIndicator" class="sync-indicator" style="display: none;">
+                        <span class="sync-spinner"></span>
+                        <span class="sync-text">Sync...</span>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <section class="categories-section">
+            <div class="category-wrapper">
+                <h2 class="categories-toggle" id="categoriesToggle">
+                    <span>Category Management</span>
+                    <span class="toggle-icon"></span>
+                </h2>
+                <div class="category-container" id="categoryContainer">
+                    <div class="categories-control">
+                        <input type="text" id="newCategoryInput" placeholder="New category name">
+                        <button id="addCategoryBtn">Add category</button>
+                    </div>
+                    <div class="delete-confirm-control">
+                        <label>
+                            <input type="checkbox" id="deleteWithoutConfirm">
+                            Delete without confirmation
+                        </label>
+                    </div>
+                    <div class="categories-list" id="categoriesList">
+                        <!-- Categories will be added dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="passwords-section">
+            <div class="passwords-wrapper">
+                <h2 class="passwords-toggle" id="passwordsToggle">
+                    <span>Password List</span>
+                    <span class="toggle-icon"></span>
+                </h2>
+                <div class="passwords-container" id="passwordsContainer">
+                    <div class="import-export-buttons">
+                        <button id="exportBtn" class="export-btn">Export</button>
+                        <select id="exportFormat" class="export-format-select">
+                            <option value="csv">CSV</option>
+                            <option value="json">JSON (encrypted)</option>
+                        </select>
+                        <label for="importFile" class="import-btn-label">
+                            <input type="file" id="importFile" accept=".csv,.json" style="display: none;">
+                            Import
+                        </label>
+                    </div>
+                    <div class="filters-section">
+                        <div class="filter-group category-filters-group">
+                            <label>Category filter:</label>
+                            <div class="category-filter-buttons" id="categoryFilterButtons">
+                                <!-- Category buttons will be added dynamically -->
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label for="searchFilter">Search all data:</label>
+                            <input type="text" id="searchFilter" class="filter-input" placeholder="Enter text to search...">
+                        </div>
+                        <button id="clearFiltersBtn" class="clear-filters-btn">Clear filters</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="passwordsTable">
+                            <thead id="tableHead">
+                                <!-- Headers will be added dynamically -->
+                            </thead>
+                            <tbody id="tableBody">
+                                <!-- Rows will be added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button id="addPasswordBtn" class="add-password-btn">Add entry</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Application modules (order matters!) -->
+    <script src="js/config.js"></script>
+    <script src="js/translations.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/crypto.js"></script>
+    <script src="js/logger.js"></script>
+    <script src="js/storage.js"></script>
+    <!-- Google Drive modules (loaded dynamically via googleDrive.js) -->
+    <script src="js/googleDrive.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/passwords.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/importExport.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/i18n.js"></script>
+</body>
+</html>
